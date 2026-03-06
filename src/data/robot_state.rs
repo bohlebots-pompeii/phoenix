@@ -6,7 +6,7 @@ pub struct RobotState {
     pub game: GameState,
     pub peer: PeerRobot,
     pub esp_now_bot_id: i8,
-    pub console_print: Vec<f64>,
+    pub console_print: PrintVector,
 }
 
 impl Default for RobotState {
@@ -17,8 +17,8 @@ impl Default for RobotState {
             motion: MotionData::default(),
             game: GameState::default(),
             peer: PeerRobot::default(),
+            console_print: PrintVector::default(),
             esp_now_bot_id: -1,
-            console_print: vec![],
         }
     }
 }
@@ -247,5 +247,20 @@ impl PeerRobot {
 
     pub fn peer_alive(&self) -> bool {
         self.flags & (1 << 5) != 0
+    }
+}
+
+//
+// ---------------- Print Vec -------------------
+//
+
+#[derive(Clone, Debug)]
+pub struct PrintVector{
+    pub print_vector: Vec<f64>,
+}
+
+impl Default for PrintVector {
+    fn default() -> Self {
+        Self { print_vector: vec![0.0] }
     }
 }

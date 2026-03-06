@@ -2008,6 +2008,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
+name = "phoenix"
+version = "0.1.0"
+dependencies = [
+ "eframe",
+ "egui",
+ "serialport",
+]
+
+[[package]]
 name = "pin-project-lite"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2238,15 +2247,6 @@ name = "regex-syntax"
 version = "0.8.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
-
-[[package]]
-name = "robocup_viz"
-version = "0.1.0"
-dependencies = [
- "eframe",
- "egui",
- "serialport",
-]
 
 [[package]]
 name = "rustix"

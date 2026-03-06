@@ -2,7 +2,7 @@ use egui::Context;
 use crate::windows::Window;
 
 pub struct WindowManager {
-    windows: Vec<Box<dyn Window>>,
+    pub windows: Vec<Box<dyn Window>>,
 }
 
 impl WindowManager {

@@ -1,3 +1,4 @@
+use std::any::Any;
 use egui::{Context, Window};
 use super::Window as WindowTrait;
 use crate::data;
@@ -41,5 +42,9 @@ impl WindowTrait for ConsoleWindow {
                     );
                 });
             });
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
     }
 }

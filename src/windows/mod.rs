@@ -8,6 +8,9 @@ pub use graph::GraphWindow;
 
 use egui::Context;
 
+use std::any::Any;
+
 pub trait Window {
     fn draw(&mut self, ctx: &Context);
+    fn as_any(&mut self) -> &mut dyn Any;
 }

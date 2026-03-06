@@ -1,3 +1,4 @@
+use std::any::Any;
 use egui::{Context, Window};
 use super::Window as WindowTrait;
 
@@ -25,5 +26,9 @@ impl WindowTrait for GraphWindow {
             .show(ctx, |ui| {
                 ui.label("Graph placeholder — add plots here.");
             });
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
     }
 }

@@ -1,4 +1,6 @@
-#[derive(Clone, Debug)]
+use serde::{Serialize, Deserialize};
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RobotState {
     pub vision: VisionData,
     pub sensors: SensorData,
@@ -27,7 +29,7 @@ impl Default for RobotState {
 // ---------------- Vision (CM5) ----------------
 //
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct VisionData {
     pub heading: f32,
     pub global_x: f32,
@@ -94,7 +96,7 @@ impl Default for VisionData {
 // ---------------- Sensors ----------------
 //
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SensorData {
     pub line_rot: i16,
     pub progress: i16,
@@ -125,7 +127,7 @@ impl Default for SensorData {
 // ---------------- Motion / Positioning ----------------
 //
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MotionData {
     pub velocity_x: f32,
     pub velocity_y: f32,
@@ -160,7 +162,7 @@ impl Default for MotionData {
 // ---------------- Game State ----------------
 //
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GameState {
     pub flags: u8,
 }
@@ -197,7 +199,7 @@ impl GameState {
 // ---------------- Peer Robot ----------------
 //
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PeerRobot {
     pub global_x: f32,
     pub global_y: f32,
@@ -254,7 +256,7 @@ impl PeerRobot {
 // ---------------- Print Vec -------------------
 //
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PrintVector{
     pub print_vector: Vec<f64>,
 }
@@ -262,5 +264,24 @@ pub struct PrintVector{
 impl Default for PrintVector {
     fn default() -> Self {
         Self { print_vector: vec![0.0] }
+    }
+}
+
+// --- JSON EXPORT FUNCTIONALITY ---
+
+impl RobotState {
+    /// Export the entire robot state to a JSON file (pretty-printed).
+    pub fn export_json(&self, path: &str) -> Result<(), std::io::Error> {
+        use std::fs::File;
+        use std::io::Write;
+        match File::create(path) {
+            Ok(mut file) => {
+                match serde_json::to_string_pretty(self) {
+                    Ok(json_str) => file.write_all(json_str.as_bytes()),
+                    Err(e) => Err(std::io::Error::new(std::io::ErrorKind::Other, e)),
+                }
+            },
+            Err(e) => Err(e)
+        }
     }
 }

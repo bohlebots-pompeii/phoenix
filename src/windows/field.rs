@@ -11,20 +11,42 @@ pub struct SerializableTimedState {
     pub state: RobotState,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum VisualizationMode {
+    Bot0,
+    Bot1,
+    BothBots,
+}
+
 pub struct FieldWindow {
-    robot_state: RobotState,
+    robot_state_0: Option<RobotState>,
+    robot_state_1: Option<RobotState>,
     slider_value: f32,
     logged_states: VecDeque<SerializableTimedState>,
     is_logging: bool,
+    // Multi-bot visualization UI state
+    mode: VisualizationMode,
+    authoritative_bot: u8, // 0 or 1, valid iff mode == BothBots
 }
 
 impl FieldWindow {
-    pub fn new(robot_state: RobotState) -> Self {
+    pub fn new(initial_state: RobotState) -> Self {
+        // Place initial state into the correct bot slot based on bot id (if -1, default to 0)
+        let mut robot_state_0 = None;
+        let mut robot_state_1 = None;
+        match initial_state.esp_now_bot_id {
+            0 | -1 => robot_state_0 = Some(initial_state),
+            1 => robot_state_1 = Some(initial_state),
+            _ => {},
+        }
         Self {
-            robot_state,
-            slider_value: 5.0, // start at 5 seconds, edit as you like
+            robot_state_0,
+            robot_state_1,
+            slider_value: 5.0,
             logged_states: VecDeque::new(),
-            is_logging: false, // start with logging enabled
+            is_logging: false,
+            mode: VisualizationMode::Bot0,
+            authoritative_bot: 0,
         }
     }
 }
@@ -60,8 +82,12 @@ impl FieldWindow {
                 serde_json::to_string_pretty(&self.logged_states).unwrap()
             );
         }
-        // Always update for GUI
-        self.robot_state = state;
+        // Store in the correct bot cache field
+        match state.esp_now_bot_id {
+            0 | -1 => self.robot_state_0 = Some(state),
+            1 => self.robot_state_1 = Some(state),
+            _ => {},
+        }
     }
 }
 
@@ -85,23 +111,35 @@ impl WindowTrait for FieldWindow {
                 ui.add(egui::ProgressBar::new(log_fill as f32).text(format!("Rolling log filled: {:.0}%", 100.0 * log_fill)));
 
                 // Export button (must be first, before painter!)
-    if ui.button("Export State to JSON").clicked() {
-        let _ = self.robot_state.export_json("robot_state_export.json");
-    }
+                if ui.button("Export State to JSON").clicked() {
+                    // Use matching bot for mode (in BothBots, use authoritative_bot)
+                    let export_bot = match self.mode {
+                        VisualizationMode::Bot0 => self.robot_state_0.as_ref(),
+                        VisualizationMode::Bot1 => self.robot_state_1.as_ref(),
+                        VisualizationMode::BothBots => match self.authoritative_bot {
+                            0 => self.robot_state_0.as_ref(),
+                            1 => self.robot_state_1.as_ref(),
+                            _ => None,
+                        }
+                    };
+                    if let Some(bot) = export_bot {
+                        let _ = bot.export_json("robot_state_export.json");
+                    }
+                }
 
-    // --- Replay Export Button ---
-    if ui.button("Save Replay").clicked() {
-        use std::fs;
-        use std::path::Path;
-        use chrono::Local;
-        // Ensure replays directory exists
-        let _ = fs::create_dir_all("replays");
-        // Format timestamp for file name
-        let time_str = Local::now().format("%Y-%m-%d_%H-%M-%S");
-        let replay_path = format!("replays/{}.json", time_str);
-        // Copy rolling_log.json to new file (best-effort)
-        let _ = fs::copy("rolling_log.json", &replay_path);
-    }
+                // --- Replay Export Button ---
+                if ui.button("Save Replay").clicked() {
+                    use std::fs;
+                    use std::path::Path;
+                    use chrono::Local;
+                    // Ensure replays directory exists
+                    let _ = fs::create_dir_all("replays");
+                    // Format timestamp for file name
+                    let time_str = Local::now().format("%Y-%m-%d_%H-%M-%S");
+                    let replay_path = format!("replays/{}.json", time_str);
+                    // Copy rolling_log.json to new file (best-effort)
+                    let _ = fs::copy("rolling_log.json", &replay_path);
+                }
 
                 ui.horizontal(|ui| {
                     if ui.button("Start Logging").clicked() {
@@ -115,13 +153,59 @@ impl WindowTrait for FieldWindow {
                 });
                 ui.separator();
 
+                // --- Visualization Mode Selection ---
+                ui.horizontal(|ui| {
+                    ui.label("Visualization mode:");
+                    if ui.radio_value(&mut self.mode, VisualizationMode::Bot0, "Bot 0").clicked() {
+                        // When switching, default authoritative_bot to this bot if applicable
+                        self.authoritative_bot = 0;
+                    }
+                    if ui.radio_value(&mut self.mode, VisualizationMode::Bot1, "Bot 1").clicked() {
+                        self.authoritative_bot = 1;
+                    }
+                    if ui.radio_value(&mut self.mode, VisualizationMode::BothBots, "Both Bots").clicked() {
+                        // Default to bot 0 being authoritative,
+                        // or leave previous authoritative as-is
+                    }
+                });
+
+                // If mode is BothBots, let user choose authoritative bot for e.g. ball
+                if self.mode == VisualizationMode::BothBots {
+                    ui.horizontal(|ui| {
+                        ui.label("Authoritative for shared features:");
+                        ui.radio_value(&mut self.authoritative_bot, 0, "Bot 0");
+                        ui.radio_value(&mut self.authoritative_bot, 1, "Bot 1");
+                    });
+                }
+
                 // Now allocate after button/any ui widgets
                 let (rect, _response) = ui.allocate_exact_size(ui.available_size(), egui::Sense::hover());
                 let painter = ui.painter();
                 // Draw field background (optional)
                 painter.rect_filled(rect, 0.0, Color32::from_rgb(20, 20, 20));
                 // Convert field coordinates to screen coordinates
-                draw_field(painter, rect, &self.robot_state);
+                match self.mode {
+                    VisualizationMode::Bot0 => {
+                        if let Some(bot) = &self.robot_state_0 {
+                            draw_field(painter, rect, bot);
+                        }
+                    },
+                    VisualizationMode::Bot1 => {
+                        if let Some(bot) = &self.robot_state_1 {
+                            draw_field(painter, rect, bot);
+                        }
+                    },
+                    VisualizationMode::BothBots => {
+                        // Draw both bots; for ambiguous features, authoritative_bot picks source (for future logic)
+                        if let Some(bot0) = &self.robot_state_0 {
+                            draw_field(painter, rect, bot0);
+                        }
+                        if let Some(bot1) = &self.robot_state_1 {
+                            draw_field(painter, rect, bot1);
+                        }
+                        // (To be further refined: differentiate bots visually, share ball from authoritative)
+                    },
+                }
             });
     }
 }

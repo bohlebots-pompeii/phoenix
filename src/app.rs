@@ -79,7 +79,7 @@ impl SoccerToolApp {
                             ball_dist: rng.gen_range(0.0..180.0),
                             flags: ((rng.gen_bool(0.8) as u8) << 0) | ((rng.gen_bool(0.2) as u8) << 3) | ((rng.gen_bool(0.7) as u8) << 5),
                         },
-                        esp_now_bot_id: rng.gen_range(0..16),
+                        esp_now_bot_id: rng.gen_range(0..2),
                         console_print: PrintVector { print_vector: vec![rng.gen_range(0.0..10.0), rng.gen_range(0.0..10.0), rng.gen_range(0.0..10.0)] },
                     };
 
@@ -97,10 +97,11 @@ impl SoccerToolApp {
 
         // Always start with default state, doesn't affect logging/logic
         let demo_robot_state = RobotState::default();
-        manager.add_window(Box::new(FieldWindow::new(demo_robot_state)));
         manager.add_window(Box::new(ConsoleWindow::new()));
         manager.add_window(Box::new(GraphWindow::new()));
         manager.add_window(Box::new(PlaybackWindow::new()));
+        manager.add_window(Box::new(FieldWindow::new(demo_robot_state)));
+
 
         Self {
             manager,

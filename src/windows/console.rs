@@ -19,7 +19,7 @@ impl WindowTrait for ConsoleWindow {
     fn draw(&mut self, ctx: &Context) {
         let print_vec = data::robot_state::PrintVector::default();
         let line = format!("{:?}\n", print_vec.print_vector);
-        const MAX_LINES: usize = 200;
+        const MAX_LINES: usize = 500;
         let mut lines: Vec<_> = self.log.lines().collect();
         lines.push(&line);
         if lines.len() > MAX_LINES {

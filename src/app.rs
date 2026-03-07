@@ -1,6 +1,6 @@
 use eframe::egui;
 use crate::widgets::window_manager::WindowManager;
-use crate::windows::{FieldWindow, ConsoleWindow, GraphWindow};
+use crate::windows::{FieldWindow, ConsoleWindow, GraphWindow, PlaybackWindow};
 use std::sync::mpsc::{Receiver, channel};
 
 pub struct SoccerToolApp {
@@ -27,59 +27,62 @@ impl SoccerToolApp {
             let (tx, rx) = mpsc::channel();
             thread::spawn(move || {
                 loop {
+                    use rand::Rng;
+                    let mut rng = rand::thread_rng();
                     let state = RobotState {
-    vision: VisionData {
-        heading: 45.0,
-        global_x: 30.0,
-        global_y: -50.0,
-        ball_rot: 30.0,
-        ball_dist: 60.0,
-        ball_exists: true,
-        target_goal_rot: -10.0,
-        target_goal_dist: 170.0,
-        own_goal_rot: 170.0,
-        own_goal_dist: 140.0,
-        away_from_own_goal_angle: 85.0,
-        target_goal_label: 1,
-        own_goal_label: 2,
-        num_detections: 2,
-        object_label: [1, 2, 0, 0, 0, 0],
-        object_rot_deg: [15.0, -90.0, 0.0, 0.0, 0.0, 0.0],
-        object_dist_cm: [80.0, 180.0, 0.0, 0.0, 0.0, 0.0],
-        cm5_running: true,
-    },
-    sensors: SensorData {
-        line_rot: -70,
-        progress: 12,
-        line_seen: true,
-        has_ball: true,
-        ball_light_gate: 100,
-        ena: true,
-    },
-    motion: MotionData {
-        velocity_x: 10.0,
-        velocity_y: -12.5,
-        velocity_magnitude: 16.0,
-        rotation_delta: 3.5,
-        middle_point_vec_x: 5.0,
-        middle_point_vec_y: 10.0,
-        middle_point_vec_angle: 63.0,
-        middle_point_vec_magnitude: 11.2,
-    },
-    game: GameState {
-        flags: (1 << 0) | (1 << 2) | (2 << 4), // running, target_is_yellow, state=2
-    },
-    peer: PeerRobot {
-        global_x: -40.0,
-        global_y: 55.0,
-        heading: 135.0,
-        ball_rot: -45.0,
-        ball_dist: 80.0,
-        flags: (1 << 0) | (1 << 3) | (1 << 5), // running, ball_exists, peer_alive
-    },
-    esp_now_bot_id: 7,
-    console_print: PrintVector { print_vector: vec![1.1, 2.2, 3.3] },
-};
+                        vision: VisionData {
+                            heading: rng.gen_range(0.0..360.0),
+                            global_x: rng.gen_range(-60.0..60.0),
+                            global_y: rng.gen_range(-90.0..90.0),
+                            ball_rot: rng.gen_range(-180.0..180.0),
+                            ball_dist: rng.gen_range(0.0..180.0),
+                            ball_exists: rng.gen_bool(0.8),
+                            target_goal_rot: rng.gen_range(-180.0..180.0),
+                            target_goal_dist: rng.gen_range(0.0..220.0),
+                            own_goal_rot: rng.gen_range(-180.0..180.0),
+                            own_goal_dist: rng.gen_range(0.0..220.0),
+                            away_from_own_goal_angle: rng.gen_range(0.0..180.0),
+                            target_goal_label: rng.gen_range(1..=2),
+                            own_goal_label: rng.gen_range(1..=2),
+                            num_detections: 2,
+                            object_label: [1, 2, 0, 0, 0, 0],
+                            object_rot_deg: [rng.gen_range(-180.0..180.0), rng.gen_range(-180.0..180.0), 0.0, 0.0, 0.0, 0.0],
+                            object_dist_cm: [rng.gen_range(0.0..200.0), rng.gen_range(0.0..200.0), 0.0, 0.0, 0.0, 0.0],
+                            cm5_running: rng.gen_bool(0.9),
+                        },
+                        sensors: SensorData {
+                            line_rot: rng.gen_range(-180..180),
+                            progress: rng.gen_range(0..100),
+                            line_seen: rng.gen_bool(0.8),
+                            has_ball: rng.gen_bool(0.5),
+                            ball_light_gate: rng.gen_range(80..150),
+                            ena: rng.gen_bool(0.85),
+                        },
+                        motion: MotionData {
+                            velocity_x: rng.gen_range(-25.0..25.0),
+                            velocity_y: rng.gen_range(-25.0..25.0),
+                            velocity_magnitude: rng.gen_range(0.0..36.0),
+                            rotation_delta: rng.gen_range(-8.0..8.0),
+                            middle_point_vec_x: rng.gen_range(-10.0..10.0),
+                            middle_point_vec_y: rng.gen_range(-10.0..10.0),
+                            middle_point_vec_angle: rng.gen_range(0.0..360.0),
+                            middle_point_vec_magnitude: rng.gen_range(0.0..12.0),
+                        },
+                        game: GameState {
+                            flags: ((rng.gen_bool(0.9) as u8) << 0) | ((rng.gen_bool(0.5) as u8) << 2) | (rng.gen_range(0..3) << 4),
+                        },
+                        peer: PeerRobot {
+                            global_x: rng.gen_range(-75.0..75.0),
+                            global_y: rng.gen_range(-105.0..105.0),
+                            heading: rng.gen_range(0.0..360.0),
+                            ball_rot: rng.gen_range(-180.0..180.0),
+                            ball_dist: rng.gen_range(0.0..180.0),
+                            flags: ((rng.gen_bool(0.8) as u8) << 0) | ((rng.gen_bool(0.2) as u8) << 3) | ((rng.gen_bool(0.7) as u8) << 5),
+                        },
+                        esp_now_bot_id: rng.gen_range(0..16),
+                        console_print: PrintVector { print_vector: vec![rng.gen_range(0.0..10.0), rng.gen_range(0.0..10.0), rng.gen_range(0.0..10.0)] },
+                    };
+
                     let _ = tx.send(serde_json::to_string(&state).unwrap());
                     thread::sleep(Duration::from_millis(100));
                 }
@@ -97,6 +100,7 @@ impl SoccerToolApp {
         manager.add_window(Box::new(FieldWindow::new(demo_robot_state)));
         manager.add_window(Box::new(ConsoleWindow::new()));
         manager.add_window(Box::new(GraphWindow::new()));
+        manager.add_window(Box::new(PlaybackWindow::new()));
 
         Self {
             manager,
@@ -108,6 +112,8 @@ impl SoccerToolApp {
 
 impl eframe::App for SoccerToolApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        ctx.request_repaint_after(std::time::Duration::from_millis(16));
+        let mut got_new_data = false;
 
         if let Some(rx) = &self.rx {
             while let Ok(line) = rx.try_recv() {
@@ -119,10 +125,17 @@ impl eframe::App for SoccerToolApp {
                             field.on_new_state(state.clone());
                         }
                     }
+                    got_new_data = true; // We got at least one message this frame
                 }
             }
         }
-
+        // ---
+        // This ensures GUI repaints instantly on new data, even if user is not interacting.
+        // This works for both real and simulated (dummy) data modes.
+        if got_new_data {
+            ctx.request_repaint();
+        }
+        // ---
         self.manager.draw(ctx);
     }
 }

@@ -24,7 +24,7 @@ impl FieldWindow {
             robot_state,
             slider_value: 5.0, // start at 5 seconds, edit as you like
             logged_states: VecDeque::new(),
-            is_logging: true, // start with logging enabled
+            is_logging: false, // start with logging enabled
         }
     }
 }
@@ -74,10 +74,34 @@ impl WindowTrait for FieldWindow {
             .resizable(true)
             .show(ctx, |ui| {
                 ui.add(egui::Slider::new(&mut self.slider_value, 0.0..=600.0).text("Recording time (s)"));
+
+                // --- Rolling Log Progress Bar ---
+                let log_fill = if self.logged_states.len() > 1 && self.slider_value > 0.0 {
+                    let first = self.logged_states.front().unwrap().timestamp;
+                    let last = self.logged_states.back().unwrap().timestamp;
+                    let span = (last - first).max(0.0);
+                    (span / (self.slider_value as f64)).min(1.0)
+                } else { 0.0 };
+                ui.add(egui::ProgressBar::new(log_fill as f32).text(format!("Rolling log filled: {:.0}%", 100.0 * log_fill)));
+
                 // Export button (must be first, before painter!)
-                if ui.button("Export State to JSON").clicked() {
-                    let _ = self.robot_state.export_json("robot_state_export.json");
-                }
+    if ui.button("Export State to JSON").clicked() {
+        let _ = self.robot_state.export_json("robot_state_export.json");
+    }
+
+    // --- Replay Export Button ---
+    if ui.button("Save Replay").clicked() {
+        use std::fs;
+        use std::path::Path;
+        use chrono::Local;
+        // Ensure replays directory exists
+        let _ = fs::create_dir_all("replays");
+        // Format timestamp for file name
+        let time_str = Local::now().format("%Y-%m-%d_%H-%M-%S");
+        let replay_path = format!("replays/{}.json", time_str);
+        // Copy rolling_log.json to new file (best-effort)
+        let _ = fs::copy("rolling_log.json", &replay_path);
+    }
 
                 ui.horizontal(|ui| {
                     if ui.button("Start Logging").clicked() {
@@ -125,7 +149,7 @@ fn draw_arc(
 
 use crate::data::robot_state::RobotState;
 
-fn draw_field(painter: &Painter, rect: egui::Rect, robot: &RobotState) {
+pub(crate) fn draw_field(painter: &Painter, rect: egui::Rect, robot: &RobotState) {
     // Field dimensions in cm (example: FIFA std = 105m x 68m => 10500 x 6800 cm)
     let field_cm_width = 158.0;   // set your real value
     let field_cm_height = 219.0;  // set your real value

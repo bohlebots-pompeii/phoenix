@@ -16,6 +16,13 @@ pub struct SerializableTimedState {
 /// UI and replay logic for selecting, playing, and visualizing log files.
 /// 
 /// Maintains file list, playhead, playback state, error display.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum VisualizationMode {
+    Bot0,
+    Bot1,
+    BothBots,
+}
+
 pub struct PlaybackWindow {
     /// List of available .json log files in /replays/
     pub replay_files: Vec<String>,
@@ -33,10 +40,16 @@ pub struct PlaybackWindow {
     pub playback_error: Option<String>,
     /// UNIX time of last directory scan (auto-refresh support)
     pub last_scan_time: f64, // for directory rescan every N seconds
+    // Visualization UI state
+    pub mode: VisualizationMode,
+    pub authoritative_bot: u8, // 0 or 1, valid iff mode == BothBots
 }
 
 impl super::Window for PlaybackWindow {
-    fn as_any(&mut self) -> &mut dyn std::any::Any {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
     }
     fn draw(&mut self, ctx: &Context) {
@@ -191,15 +204,86 @@ let changed = slider_response.on_hover_text("Drag to seek to a specific frame").
                         self.playing = false;
                     }
                 }
+                // --- Visualization Mode Selection ---
+                ui.horizontal(|ui| {
+                    ui.label("Visualization mode:");
+                    if ui.radio_value(&mut self.mode, VisualizationMode::Bot0, "Bot 0").clicked() {
+                        self.authoritative_bot = 0;
+                    }
+                    if ui.radio_value(&mut self.mode, VisualizationMode::Bot1, "Bot 1").clicked() {
+                        self.authoritative_bot = 1;
+                    }
+                    if ui.radio_value(&mut self.mode, VisualizationMode::BothBots, "Both Bots").clicked() {
+                        // Keep previous authoritative by default
+                    }
+                });
+                if self.mode == VisualizationMode::BothBots {
+                    ui.horizontal(|ui| {
+                        ui.label("Authoritative for shared features:");
+                        ui.radio_value(&mut self.authoritative_bot, 0, "Bot 0");
+                        ui.radio_value(&mut self.authoritative_bot, 1, "Bot 1");
+                    });
+                }
+                // --- State Export Button ---
+                if ui.button("Export State to JSON").clicked() {
+                    let export_bot = match self.mode {
+                        VisualizationMode::Bot0 => self.latest_state_for_bot(0),
+                        VisualizationMode::Bot1 => self.latest_state_for_bot(1),
+                        VisualizationMode::BothBots => match self.authoritative_bot {
+                            0 => self.latest_state_for_bot(0),
+                            1 => self.latest_state_for_bot(1),
+                            _ => None,
+                        },
+                    };
+                    if let Some(bot) = export_bot {
+                        let _ = bot.export_json("robot_state_export.json");
+                    }
+                }
                 // --- Field Visualization of replayed RobotState ---
                 ui.separator();
                 let (rect, _response) = ui.allocate_exact_size(ui.available_size(), egui::Sense::hover());
                 let painter = ui.painter();
-                use crate::windows::field::draw_field;
-                if let Some(state) = self.playback_states.get(self.playhead) {
-                    draw_field(painter, rect, &state.state);
-                } else {
-                    painter.rect_filled(rect, 0.0, Color32::from_rgb(30, 0, 0));
+                use crate::windows::field::{draw_field, draw_field_base, draw_peer_robot_only};
+                // Always draw the field background (even if no robot present)
+                draw_field_base(painter, rect);
+                let bot_0 = self.latest_state_for_bot(0);
+                let bot_1 = self.latest_state_for_bot(1);
+                match self.mode {
+                    VisualizationMode::Bot0 => {
+                        if let Some(bot) = bot_0 {
+                            draw_field(painter, rect, bot);
+                            // Draw peer outline: peer index is 1 (Bot0's peer is Bot1)
+                            draw_peer_robot_only(painter, rect, &bot.peer, 1);
+                        }
+                    },
+                    VisualizationMode::Bot1 => {
+                        if let Some(bot) = bot_1 {
+                            draw_field(painter, rect, bot);
+                            // Draw peer outline: peer index is 0 (Bot1's peer is Bot0)
+                            draw_peer_robot_only(painter, rect, &bot.peer, 0);
+                        }
+                    },
+                    VisualizationMode::BothBots => {
+                        use crate::windows::field::{draw_robot_only, draw_shared_features};
+                        if let Some(bot0) = bot_0 {
+                            draw_robot_only(painter, rect, bot0);
+                        }
+                        if let Some(bot1) = bot_1 {
+                            draw_robot_only(painter, rect, bot1);
+                        }
+                        // Draw shared features only from authoritative bot
+                        let authoritative = match self.authoritative_bot {
+                            0 => bot_0,
+                            1 => bot_1,
+                            _ => None,
+                        };
+                        if let Some(bot) = authoritative {
+                            draw_shared_features(painter, rect, bot);
+                        }
+                    },
+                }
+                // Overlay a subtle message if neither bot is present
+                if bot_0.is_none() && bot_1.is_none() {
                     painter.text(rect.center(), egui::Align2::CENTER_CENTER, "No state loaded", egui::FontId::default(), Color32::WHITE);
                 }
             });
@@ -207,6 +291,19 @@ let changed = slider_response.on_hover_text("Drag to seek to a specific frame").
 }
 
 impl PlaybackWindow {
+    /// Find the latest state for the given ESP-NOW bot ID at or before the current playhead
+    fn latest_state_for_bot(&self, bot_id: i8) -> Option<&RobotState> {
+        if self.playback_states.is_empty() { return None; }
+        // Playhead is an index into playback_states (already clamped)
+        for idx in (0..=self.playhead).rev() {
+            let state = &self.playback_states[idx].state;
+            if state.esp_now_bot_id == bot_id {
+                return Some(state);
+            }
+        }
+        None
+    }
+
     /// Create a new, empty playback window (usually called on app start).
     pub fn new() -> Self {
         Self { 
@@ -218,6 +315,8 @@ impl PlaybackWindow {
             last_update_time: 0.0, 
             playback_error: None,
             last_scan_time: 0.0, // initialize
+            mode: VisualizationMode::Bot0,
+            authoritative_bot: 0,
         }
     }
 

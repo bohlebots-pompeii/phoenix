@@ -20,7 +20,9 @@ pub enum VisualizationMode {
 
 pub struct FieldWindow {
     robot_state_0: Option<RobotState>,
+    robot_time_0: Option<std::time::Instant>,
     robot_state_1: Option<RobotState>,
+    robot_time_1: Option<std::time::Instant>,
     slider_value: f32,
     logged_states: VecDeque<SerializableTimedState>,
     is_logging: bool,
@@ -41,7 +43,9 @@ impl FieldWindow {
         }
         Self {
             robot_state_0,
+            robot_time_0: None,
             robot_state_1,
+            robot_time_1: None,
             slider_value: 5.0,
             logged_states: VecDeque::new(),
             is_logging: false,
@@ -82,19 +86,30 @@ impl FieldWindow {
                 serde_json::to_string_pretty(&self.logged_states).unwrap()
             );
         }
-        // Store in the correct bot cache field
+        // Store in the correct bot cache field & update timestamps
+        use std::time::Instant;
         match state.esp_now_bot_id {
-            0 | -1 => self.robot_state_0 = Some(state),
-            1 => self.robot_state_1 = Some(state),
+            0 | -1 => {
+                self.robot_state_0 = Some(state);
+                self.robot_time_0 = Some(Instant::now());
+            },
+            1 => {
+                self.robot_state_1 = Some(state);
+                self.robot_time_1 = Some(Instant::now());
+            },
             _ => {},
         }
     }
 }
 
 impl WindowTrait for FieldWindow {
-    fn as_any(&mut self) -> &mut dyn std::any::Any {
+    fn as_any(&self) -> &dyn std::any::Any {
         self
     }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+
     fn draw(&mut self, ctx: &Context) {
         Window::new("Soccer Field")
             .resizable(true)
@@ -182,28 +197,53 @@ impl WindowTrait for FieldWindow {
                 let (rect, _response) = ui.allocate_exact_size(ui.available_size(), egui::Sense::hover());
                 let painter = ui.painter();
                 // Draw field background (optional)
-                painter.rect_filled(rect, 0.0, Color32::from_rgb(20, 20, 20));
+                draw_field_base(painter, rect);
                 // Convert field coordinates to screen coordinates
+                use std::time::Duration;
+                let timeout = Duration::from_secs(2);
                 match self.mode {
                     VisualizationMode::Bot0 => {
-                        if let Some(bot) = &self.robot_state_0 {
-                            draw_field(painter, rect, bot);
+                        if let (Some(bot), Some(t)) = (&self.robot_state_0, self.robot_time_0) {
+                            if t.elapsed() < timeout {
+                                draw_field(painter, rect, bot);
+                                // Draw peer as outline/color, using peer index
+                                draw_peer_robot_only(painter, rect, &bot.peer, 1); // Bot0's peer is Bot1
+                            }
                         }
                     },
                     VisualizationMode::Bot1 => {
-                        if let Some(bot) = &self.robot_state_1 {
-                            draw_field(painter, rect, bot);
+                        if let (Some(bot), Some(t)) = (&self.robot_state_1, self.robot_time_1) {
+                            if t.elapsed() < timeout {
+                                draw_field(painter, rect, bot);
+                                draw_peer_robot_only(painter, rect, &bot.peer, 0); // Bot1's peer is Bot0
+                            }
                         }
                     },
                     VisualizationMode::BothBots => {
-                        // Draw both bots; for ambiguous features, authoritative_bot picks source (for future logic)
-                        if let Some(bot0) = &self.robot_state_0 {
-                            draw_field(painter, rect, bot0);
+                        use crate::windows::field::{draw_robot_only, draw_shared_features};
+                        if let (Some(bot0), Some(t0)) = (&self.robot_state_0, self.robot_time_0) {
+                            if t0.elapsed() < timeout {
+                                draw_robot_only(painter, rect, bot0);
+                            }
                         }
-                        if let Some(bot1) = &self.robot_state_1 {
-                            draw_field(painter, rect, bot1);
+                        if let (Some(bot1), Some(t1)) = (&self.robot_state_1, self.robot_time_1) {
+                            if t1.elapsed() < timeout {
+                                draw_robot_only(painter, rect, bot1);
+                            }
                         }
-                        // (To be further refined: differentiate bots visually, share ball from authoritative)
+                        // Shared features (ball, peer, detections) from authoritative bot, if not expired
+                        let authoritative = match self.authoritative_bot {
+                            0 => {
+                                if let Some(t0) = self.robot_time_0 { if t0.elapsed() < timeout { self.robot_state_0.as_ref() } else { None } } else { None }
+                            },
+                            1 => {
+                                if let Some(t1) = self.robot_time_1 { if t1.elapsed() < timeout { self.robot_state_1.as_ref() } else { None } } else { None }
+                            },
+                            _ => None,
+                        };
+                        if let Some(bot) = authoritative {
+                            draw_shared_features(painter, rect, bot);
+                        }
                     },
                 }
             });
@@ -233,7 +273,272 @@ fn draw_arc(
 
 use crate::data::robot_state::RobotState;
 
+pub(crate) fn draw_field_base(painter: &Painter, rect: egui::Rect) {
+    // Field dimensions in cm (example: FIFA std = 105m x 68m => 10500 x 6800 cm)
+    let field_cm_width = 158.0;   // set your real value
+    let field_cm_height = 219.0;  // set your real value
+
+    // Fit with margin inside UI rect
+    let margin = 30.0; // px
+    let avail_width = rect.width() - 2.0 * margin;
+    let avail_height = rect.height() - 2.0 * margin;
+    let scale = f32::min(avail_width / field_cm_width, avail_height / field_cm_height);
+
+    let field_px_width = field_cm_width * scale;
+    let field_px_height = field_cm_height * scale;
+    let field_center = rect.center();
+
+    // New: map from center-origin field coordinates (in cm, where (0,0) = field center)
+    let to_px = |mx: f32, my: f32| -> Pos2 {
+        Pos2::new(
+            field_center.x + mx * scale, // X+ is right as usual
+            field_center.y - my * scale  // Y+ is upward on canvas
+        )
+    };
+
+    // Colors and strokes
+    let line = Stroke::new(2.0, Color32::WHITE);
+    let center_circle_line = Stroke::new(1.0, Color32::BLACK);
+    let yellow_goal_line = Stroke::new(2.0, Color32::YELLOW);
+    let blue_goal_line = Stroke::new(2.0, Color32::BLUE);
+    let walls_line = Stroke::new(5.0, Color32::BLACK);
+    let goal_stroke = Stroke::new(3.0, Color32::WHITE);
+    let thin = Stroke::new(1.0, Color32::GRAY);
+
+    // Ground
+    painter.rect_filled(
+        egui::Rect::from_min_max(
+            to_px(-field_cm_width/2.0 - 12.0, field_cm_height/2.0 + 12.0),
+            to_px(field_cm_width/2.0 + 12.0, -field_cm_height/2.0 - 12.0)
+        ),
+        0.0,
+        Color32::DARK_GREEN
+    );
+
+    // Walls
+    painter.rect_stroke(
+        egui::Rect::from_min_max(
+            to_px(-field_cm_width/2.0 - 12.0, field_cm_height/2.0 + 12.0),
+            to_px(field_cm_width/2.0 + 12.0, -field_cm_height/2.0 - 12.0)
+        ),
+        0.0,
+        walls_line
+    );
+
+    // Field boundary (corners: (-w/2, -h/2), (w/2, h/2))
+    painter.rect_stroke(
+        egui::Rect::from_min_max(
+            to_px(-field_cm_width/2.0, field_cm_height/2.0),
+            to_px(field_cm_width/2.0, -field_cm_height/2.0)
+        ), 0.0, line
+    );
+
+    // Center circle and mark
+    let center = to_px(0.0, 0.0);
+    let center_circle_radius = 30.0 * scale;
+    painter.circle_stroke(center, center_circle_radius, center_circle_line);
+    painter.circle_filled(center, 1.0 * scale, Color32::BLACK);
+
+    // Penalty areas and goal areas (center-origin coordinates)
+    let pa_w = 80.0; // penalty area width
+    let pa_h = 24.0; // penalty area height
+    let ga_w = 60.0;
+    let ga_h = 7.4;
+    let y_top = field_cm_height/2.0;
+
+    // Penalty area 1 (north)
+    let pa1_y1 = y_top;
+    let pa1_y2 = y_top - pa_h;
+    let (pa1y_min, pa1y_max) = if pa1_y1 < pa1_y2 { (pa1_y1, pa1_y2) } else { (pa1_y2, pa1_y1) };
+    painter.rect_stroke(
+        egui::Rect::from_min_max(
+            to_px(-pa_w/2.0, pa1y_max),
+            to_px(pa_w/2.0, pa1y_min)
+        ), 0.0, line
+    );
+
+    // Goal area 1 (north)
+    let ga1_y1 = y_top;
+    let ga1_y2 = y_top + ga_h;
+    let (ga1y_min, ga1y_max) = if ga1_y1 < ga1_y2 { (ga1_y1, ga1_y2) } else { (ga1_y2, ga1_y1) };
+    painter.rect_stroke(
+        egui::Rect::from_min_max(
+            to_px(-ga_w/2.0, ga1y_max),
+            to_px(ga_w/2.0, ga1y_min)
+        ), 0.0, yellow_goal_line
+    );
+
+    // Penalty area 2 (fix: make it extend inwards from -y_top)
+    let pa2_y1 = -y_top;
+    let pa2_y2 = -y_top + pa_h;
+    let (pa2y_min, pa2y_max) = if pa2_y1 < pa2_y2 { (pa2_y1, pa2_y2) } else { (pa2_y2, pa2_y1) };
+    painter.rect_stroke(
+        egui::Rect::from_min_max(
+            to_px(-pa_w/2.0, pa2y_max),
+            to_px(pa_w/2.0, pa2y_min)
+        ), 0.0, line
+    );
+
+    // Goal area 2 (fix: inside -y_top)
+    let ga2_y1 = -y_top;
+    let ga2_y2 = -y_top - ga_h;
+    let (ga2y_min, ga2y_max) = if ga2_y1 < ga2_y2 { (ga2_y1, ga2_y2) } else { (ga2_y2, ga2_y1) };
+    painter.rect_stroke(
+        egui::Rect::from_min_max(
+            to_px(-ga_w/2.0, ga2y_max),
+            to_px(ga_w/2.0, ga2y_min)
+        ), 0.0, blue_goal_line
+    );
+
+    // Draw goals just outside the field line
+    let goal_w = 24.0;
+    let goal_depth = 7.0;
+    // Top goal (north)
+    let g_top_y = y_top + goal_depth;
+    painter.rect_stroke(
+        egui::Rect::from_min_max(
+            to_px(-goal_w/2.0, y_top),
+            to_px(goal_w/2.0, g_top_y)
+        ), 0.0, goal_stroke
+    );
+
+    // Neutral point 1
+    let pen_spot = to_px(40.0, y_top - 45.0);
+    painter.circle_filled(pen_spot, 1.0 * scale, Color32::BLACK);
+    // Neutral point 2
+    let pen_spot = to_px(-40.0, y_top - 45.0);
+    painter.circle_filled(pen_spot, 1.0 * scale, Color32::BLACK);
+    // Neutral point 3
+    let pen_spot = to_px(40.0, -y_top + 45.0);
+    painter.circle_filled(pen_spot, 1.0 * scale, Color32::BLACK);
+    // Neutral point 4
+    let pen_spot = to_px(-40.0, -y_top + 45.0);
+    painter.circle_filled(pen_spot, 1.0 * scale, Color32::BLACK);
+}
+
+fn robot_display_color(bot_id: i8) -> Color32 {
+    match bot_id {
+        0 | -1 => Color32::WHITE,
+        1 => Color32::LIGHT_RED,
+        _ => Color32::DARK_GRAY,
+    }
+}
+
+pub(crate) fn draw_peer_robot_only(painter: &Painter, rect: egui::Rect, peer: &crate::data::robot_state::PeerRobot, peer_index: i8) {
+    let field_cm_width = 158.0;   // set your real value
+    let field_cm_height = 219.0;  // set your real value
+    let margin = 30.0;
+    let avail_width = rect.width() - 2.0 * margin;
+    let avail_height = rect.height() - 2.0 * margin;
+    let scale = f32::min(avail_width / field_cm_width, avail_height / field_cm_height);
+    let field_center = rect.center();
+    let to_px = |mx: f32, my: f32| -> egui::Pos2 {
+        egui::Pos2::new(
+            field_center.x + mx * scale,
+            field_center.y - my * scale
+        )
+    };
+    let peer_pos = to_px(peer.global_x, peer.global_y);
+    let robot_radius = 5.0 * scale;
+    let color = robot_display_color(peer_index);
+    painter.circle_stroke(peer_pos, robot_radius, egui::Stroke::new(2.0, color));
+    let heading_rad = peer.heading.to_radians();
+    let heading_len = 12.0 * scale;
+    let tip = to_px(
+        peer.global_x + heading_len * heading_rad.cos(),
+        peer.global_y + heading_len * heading_rad.sin(),
+    );
+    painter.line_segment([peer_pos, tip], egui::Stroke::new(2.0, color));
+}
+
+pub(crate) fn draw_robot_only(painter: &Painter, rect: egui::Rect, robot: &RobotState) {
+    // Same transform code as draw_field/draw_field_base
+    // (Paste from draw_field)
+    // Field dimensions in cm (example: FIFA std = 105m x 68m => 10500 x 6800 cm)
+    let field_cm_width = 158.0;   // set your real value
+    let field_cm_height = 219.0;  // set your real value
+    let margin = 30.0;
+    let avail_width = rect.width() - 2.0 * margin;
+    let avail_height = rect.height() - 2.0 * margin;
+    let scale = f32::min(avail_width / field_cm_width, avail_height / field_cm_height);
+    let field_center = rect.center();
+    let to_px = |mx: f32, my: f32| -> egui::Pos2 {
+        egui::Pos2::new(
+            field_center.x + mx * scale,
+            field_center.y - my * scale
+        )
+    };
+    let robot_pos = to_px(robot.vision.global_x, robot.vision.global_y);
+    let robot_radius = 5.0 * scale;
+    let color = robot_display_color(robot.esp_now_bot_id);
+    painter.circle_filled(robot_pos, robot_radius, color);
+    let heading_rad = robot.vision.heading.to_radians();
+    let heading_len = 12.0 * scale;
+    let tip = to_px(
+        robot.vision.global_x + heading_len * heading_rad.cos(),
+        robot.vision.global_y + heading_len * heading_rad.sin(),
+    );
+    painter.line_segment([robot_pos, tip], Stroke::new(2.0, Color32::LIGHT_BLUE));
+}
+
+pub(crate) fn draw_shared_features(painter: &Painter, rect: egui::Rect, robot: &RobotState) {
+    // Use exact transform math as draw_field
+    let field_cm_width = 158.0;
+    let field_cm_height = 219.0;
+    let margin = 30.0;
+    let avail_width = rect.width() - 2.0 * margin;
+    let avail_height = rect.height() - 2.0 * margin;
+    let scale = f32::min(avail_width / field_cm_width, avail_height / field_cm_height);
+    let field_center = rect.center();
+    let to_px = |mx: f32, my: f32| -> egui::Pos2 {
+        egui::Pos2::new(
+            field_center.x + mx * scale,
+            field_center.y - my * scale
+        )
+    };
+    let robot_radius = 5.0 * scale;
+    let heading_len = 12.0 * scale;
+    // Ball
+    if robot.vision.ball_exists {
+        let theta = robot.vision.heading.to_radians() + robot.vision.ball_rot.to_radians();
+        let b_dist = robot.vision.ball_dist;
+        let bx = robot.vision.global_x + b_dist * theta.cos();
+        let by = robot.vision.global_y + b_dist * theta.sin();
+        let ball_pos = to_px(bx, by);
+        painter.circle_filled(ball_pos, 3.0 * scale, Color32::RED);
+    }
+    // Peer robot (No longer drawing peer pose to avoid ghost robots)
+    // If you want debug: Enable with a conditional (e.g., if DEBUG {})
+    // let peer_pos = to_px(robot.peer.global_x, robot.peer.global_y);
+    // painter.circle_stroke(peer_pos, robot_radius, Stroke::new(2.0, Color32::YELLOW));
+    // let peer_heading_rad = robot.peer.heading.to_radians();
+    // let peer_tip = to_px(
+    //     robot.peer.global_x + heading_len * peer_heading_rad.cos(),
+    //     robot.peer.global_y + heading_len * peer_heading_rad.sin(),
+    // );
+    // painter.line_segment([peer_pos, peer_tip], Stroke::new(2.0, Color32::YELLOW));
+
+    // Detections
+    for det in 0..robot.vision.num_detections as usize {
+        let label = robot.vision.object_label[det];
+        let rot_deg = robot.vision.object_rot_deg[det];
+        let dist = robot.vision.object_dist_cm[det];
+        let theta = robot.vision.heading.to_radians() + rot_deg.to_radians();
+        let ox = robot.vision.global_x + dist * theta.cos();
+        let oy = robot.vision.global_y + dist * theta.sin();
+        let obj_pos = to_px(ox, oy);
+        let obj_col = match label {
+            1 => Color32::LIGHT_GREEN,
+            2 => Color32::LIGHT_YELLOW,
+            _ => Color32::GRAY,
+        };
+        painter.circle_filled(obj_pos, 2.0 * scale, obj_col);
+    }
+}
+
 pub(crate) fn draw_field(painter: &Painter, rect: egui::Rect, robot: &RobotState) {
+    draw_field_base(painter, rect);
+
     // Field dimensions in cm (example: FIFA std = 105m x 68m => 10500 x 6800 cm)
     let field_cm_width = 158.0;   // set your real value
     let field_cm_height = 219.0;  // set your real value
@@ -383,7 +688,8 @@ pub(crate) fn draw_field(painter: &Painter, rect: egui::Rect, robot: &RobotState
     // ===== Draw Robot =====
     let robot_pos = to_px(robot.vision.global_x, robot.vision.global_y);
     let robot_radius = 5.0 * scale;
-    painter.circle_filled(robot_pos, robot_radius, Color32::WHITE);
+    let color = robot_display_color(robot.esp_now_bot_id);
+    painter.circle_filled(robot_pos, robot_radius, color);
     // Heading arrow
     let heading_rad = robot.vision.heading.to_radians();
     let heading_len = 12.0 * scale;
@@ -404,15 +710,17 @@ pub(crate) fn draw_field(painter: &Painter, rect: egui::Rect, robot: &RobotState
     }
 
     // ===== Draw Peer Robot =====
-    let peer_pos = to_px(robot.peer.global_x, robot.peer.global_y);
-    painter.circle_stroke(peer_pos, robot_radius, Stroke::new(2.0, Color32::YELLOW));
-    // Peer heading
-    let peer_heading_rad = robot.peer.heading.to_radians();
-    let peer_tip = to_px(
-        robot.peer.global_x + heading_len * peer_heading_rad.cos(),
-        robot.peer.global_y + heading_len * peer_heading_rad.sin(),
-    );
-    painter.line_segment([peer_pos, peer_tip], Stroke::new(2.0, Color32::YELLOW));
+    // (No longer drawing peer pose to avoid ghost robots)
+    // If debug, optionally enable below:
+    // let peer_pos = to_px(robot.peer.global_x, robot.peer.global_y);
+    // painter.circle_stroke(peer_pos, robot_radius, Stroke::new(2.0, Color32::YELLOW));
+    // let peer_heading_rad = robot.peer.heading.to_radians();
+    // let peer_tip = to_px(
+    //     robot.peer.global_x + heading_len * peer_heading_rad.cos(),
+    //     robot.peer.global_y + heading_len * peer_heading_rad.sin(),
+    // );
+    // painter.line_segment([peer_pos, peer_tip], Stroke::new(2.0, Color32::YELLOW));
+
 
     // ===== Draw Detections/Objects =====
     for det in 0..robot.vision.num_detections as usize {

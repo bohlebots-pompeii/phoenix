@@ -1,6 +1,6 @@
 use eframe::egui;
 use crate::widgets::window_manager::WindowManager;
-use crate::windows::{FieldWindow, ConsoleWindow, GraphWindow, PlaybackWindow};
+use crate::windows::{FieldWindow, ConsoleWindow, GraphWindow, PlaybackWindow, RawSerialWindow, RawPlaybackWindow};
 use std::sync::mpsc::{Receiver, channel};
 
 pub struct SoccerToolApp {
@@ -101,6 +101,8 @@ impl SoccerToolApp {
         manager.add_window(Box::new(GraphWindow::new()));
         manager.add_window(Box::new(PlaybackWindow::new()));
         manager.add_window(Box::new(FieldWindow::new(demo_robot_state)));
+        manager.add_window(Box::new(RawSerialWindow::new()));
+        manager.add_window(Box::new(RawPlaybackWindow::new()));
 
 
         Self {
@@ -118,11 +120,17 @@ impl eframe::App for SoccerToolApp {
 
         if let Some(rx) = &self.rx {
             while let Ok(line) = rx.try_recv() {
+                // Deliver raw line to all RawSerialWindows
+                for window in self.manager.windows.iter_mut() {
+                    if let Some(raw_serial) = window.as_any_mut().downcast_mut::<RawSerialWindow>() {
+                        raw_serial.on_new_serial_line(&line);
+                    }
+                }
                 // Parse line into RobotState:
                 if let Some(state) = crate::serial::parser::parse_line(&line) {
                     // Find FieldWindow and send state
                     for window in self.manager.windows.iter_mut() {
-                        if let Some(field) = window.as_any().downcast_mut::<FieldWindow>() {
+                        if let Some(field) = window.as_any_mut().downcast_mut::<FieldWindow>() {
                             field.on_new_state(state.clone());
                         }
                     }

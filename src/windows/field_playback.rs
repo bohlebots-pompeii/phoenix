@@ -3,6 +3,7 @@ use egui::{Color32, Context, Window};
 //use crate::windows::field::SerializableTimedState;
 use serde::{Serialize, Deserialize};
 use crate::data::robot_state::RobotState;
+use crate::windows::WindowConfig;
 
 /// Holds a single robot state with its replay timestamp.
 #[derive(Serialize, Deserialize, Clone)]
@@ -52,7 +53,7 @@ impl super::Window for PlaybackWindow {
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
     }
-    fn draw(&mut self, ctx: &Context) {
+    fn draw(&mut self, ctx: &Context, config: &mut WindowConfig, app_width: f32, app_height: f32) {
         use std::time::{SystemTime, UNIX_EPOCH};
         // --- Auto refresh replay_files every second ---
         let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64();
@@ -79,9 +80,13 @@ impl super::Window for PlaybackWindow {
                 },
             }
         }
-        Window::new("Replay Window")
-            .resizable(true)
-            .show(ctx, |ui| {
+let rect = config.field_playback_rect(app_width, app_height);
+Window::new(format!("Replay Window [{}]", config.selected_layout_idx()))
+    .default_width(rect.width())
+    .default_height(rect.height())
+    .default_pos([rect.left(), rect.top()])
+    .resizable(true)
+    .show(ctx, |ui| { 
                 // --- Replay file selector ---
                 if !self.replay_files.is_empty() {
                     egui::ComboBox::from_label("Select Replay File")

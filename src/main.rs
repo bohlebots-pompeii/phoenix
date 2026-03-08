@@ -4,7 +4,6 @@ mod windows;
 mod data;
 mod serial;
 
-
 use app::SoccerToolApp;
 
 use std::env;

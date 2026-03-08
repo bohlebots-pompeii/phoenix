@@ -1,10 +1,13 @@
 use eframe::egui;
 use crate::widgets::window_manager::WindowManager;
-use crate::windows::{FieldWindow, ConsoleWindow, GraphWindow, PlaybackWindow, RawSerialWindow, RawPlaybackWindow};
+use crate::windows::{FieldWindow, ConsoleWindow, GraphWindow, PlaybackWindow, RawSerialWindow, RawPlaybackWindow, LayoutWindow, WindowConfig};
 use std::sync::mpsc::{Receiver, channel};
 
 pub struct SoccerToolApp {
     manager: WindowManager,
+    window_config: WindowConfig,
+    pub app_width: f32,
+    pub app_height: f32,
 
     rx: Option<Receiver<String>>,
     serial_enabled: bool,
@@ -89,7 +92,7 @@ impl SoccerToolApp {
             });
             Some(rx)
         } else {
-            // PRODUCTION: Replace with real serial receive code, or keep None for now
+            // PRODUCTION: TODO Replace with real serial receive code, or keep None for now
             None
         };
 
@@ -103,12 +106,16 @@ impl SoccerToolApp {
         manager.add_window(Box::new(FieldWindow::new(demo_robot_state)));
         manager.add_window(Box::new(RawSerialWindow::new()));
         manager.add_window(Box::new(RawPlaybackWindow::new()));
+        manager.add_window(Box::new(LayoutWindow::new()));
 
 
         Self {
             manager,
+            window_config: WindowConfig::default(),
+            app_width: 0.0,
+            app_height: 0.0,
             rx,
-            serial_enabled: false, // For extension: update if you use real serial
+            serial_enabled: false, // TODO For extension: update if you use real serial
         }
     }
 }
@@ -116,6 +123,10 @@ impl SoccerToolApp {
 impl eframe::App for SoccerToolApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         ctx.request_repaint_after(std::time::Duration::from_millis(16));
+        let app_rect = ctx.screen_rect();
+        self.app_width = app_rect.width();
+        self.app_height = app_rect.height();
+        WindowConfig::compute_scale(self.app_width, self.app_height);
         let mut got_new_data = false;
 
         if let Some(rx) = &self.rx {
@@ -145,6 +156,6 @@ impl eframe::App for SoccerToolApp {
             ctx.request_repaint();
         }
         // ---
-        self.manager.draw(ctx);
+        self.manager.draw(ctx, &mut self.window_config, self.app_width, self.app_height);
     }
 }

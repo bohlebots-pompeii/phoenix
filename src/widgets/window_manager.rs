@@ -14,7 +14,7 @@ impl WindowManager {
         self.windows.push(window);
     }
 
-    pub fn draw(&mut self, ctx: &Context) {
+    pub fn draw(&mut self, ctx: &Context, config: &mut crate::windows::WindowConfig, app_width: f32, app_height: f32) {
         use crate::windows::{RawPlaybackWindow, PlaybackWindow};
         // Find PlaybackWindow and prepare snapshot for playback
         let playback_snapshot = self.windows.iter()
@@ -29,9 +29,9 @@ impl WindowManager {
 
         for window in self.windows.iter_mut() {
             if let Some(raw_playback) = window.as_any_mut().downcast_mut::<RawPlaybackWindow>() {
-                raw_playback.draw_with_playback(ctx, playback_snapshot.clone());
+                raw_playback.draw_with_playback(ctx, config, app_width, app_height, playback_snapshot.clone());
             } else {
-                window.draw(ctx);
+                window.draw(ctx, config, app_width, app_height);
             }
         }
     }

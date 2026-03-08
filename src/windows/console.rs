@@ -2,6 +2,7 @@ use std::any::Any;
 use egui::{Context, Window};
 use super::Window as WindowTrait;
 use crate::data;
+use crate::windows::WindowConfig;
 
 pub struct ConsoleWindow {
     log: String,
@@ -16,7 +17,7 @@ impl ConsoleWindow {
 }
 
 impl WindowTrait for ConsoleWindow {
-    fn draw(&mut self, ctx: &Context) {
+    fn draw(&mut self, ctx: &Context, config: &mut WindowConfig, app_width: f32, app_height: f32) {
         let print_vec = data::robot_state::PrintVector::default();
         let line = format!("{:?}\n", print_vec.print_vector);
         const MAX_LINES: usize = 500;
@@ -26,9 +27,11 @@ impl WindowTrait for ConsoleWindow {
             lines = lines[lines.len() - MAX_LINES..].to_vec();
         }
         self.log = lines.join("\n");
-        Window::new("Console")
-            .default_width(9000.0)
-            .default_height(600.0)
+        let rect = config.console_rect(app_width, app_height);
+        Window::new(format!("Console [{}]", config.selected_layout_idx()))
+            .default_width(rect.width())
+            .default_height(rect.height())
+            .default_pos([rect.left(), rect.top()])
             .resizable(true)
             .show(ctx, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {

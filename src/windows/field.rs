@@ -1,5 +1,5 @@
 use egui::{Color32, Context, Painter, Pos2, Stroke, Window, Shape};
-use super::Window as WindowTrait;
+use super::{Window as WindowTrait, WindowConfig};
 
 use std::collections::VecDeque;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -110,8 +110,12 @@ impl WindowTrait for FieldWindow {
         self
     }
 
-    fn draw(&mut self, ctx: &Context) {
-        Window::new("Soccer Field")
+    fn draw(&mut self, ctx: &Context, config: &mut WindowConfig, app_width: f32, app_height: f32) {
+        let rect = config.field_rect(app_width, app_height);
+        Window::new(format!("Soccer Field [{}]", config.selected_layout_idx()))
+            .default_width(rect.width())
+            .default_height(rect.height())
+            .default_pos([rect.left(), rect.top()])
             .resizable(true)
             .show(ctx, |ui| {
                 ui.add(egui::Slider::new(&mut self.slider_value, 0.0..=600.0).text("Recording time (s)"));

@@ -1,6 +1,6 @@
 use std::any::Any;
 use egui::{Context, Window};
-use super::Window as WindowTrait;
+use super::{Window as WindowTrait, WindowConfig};
 
 pub struct GraphWindow {
     values: Vec<f32>,
@@ -20,11 +20,15 @@ impl GraphWindow {
 }
 
 impl WindowTrait for GraphWindow {
-    fn draw(&mut self, ctx: &Context) {
-        Window::new("Graph")
+    fn draw(&mut self, ctx: &Context, config: &mut WindowConfig, app_width: f32, app_height: f32) {
+        let rect = config.graph_rect(app_width, app_height);
+        Window::new(format!("Graph [{}]", config.selected_layout_idx()))
+            .default_width(rect.width())
+            .default_height(rect.height())
+            .default_pos([rect.left(), rect.top()])
             .resizable(true)
             .show(ctx, |ui| {
-                ui.label("Graph placeholder — add plots here.");
+                ui.label("Graph placeholder 4 add plots here.");
             });
     }
 

@@ -1,6 +1,6 @@
 use std::any::Any;
 use egui::{Context, Window};
-use crate::windows::Window as WindowTrait;
+use crate::windows::{Window as WindowTrait, WindowConfig};
 use crate::windows::PlaybackWindow;
 use crate::data::robot_state::RobotState;
 
@@ -25,12 +25,16 @@ impl RawPlaybackWindow {
     pub fn draw_with_playback(
         &mut self,
         ctx: &Context,
+        config: &WindowConfig,
+        app_width: f32,
+        app_height: f32,
         playback: Option<PlaybackSnapshot>,
     ) {
-        Window::new("Raw Playback Data")
-            .default_width(300.0)
-            .default_height(800.0)
-            .default_pos([1040.0, 120.0])
+        let rect = config.raw_playback_rect(app_width, app_height);
+        Window::new(format!("Raw Playback Data [{}]", config.selected_layout_idx()))
+            .default_width(rect.width())
+            .default_height(rect.height())
+            .default_pos([rect.left(), rect.top()])
             .resizable(true)
             .show(ctx, |ui| {
                 let mut latest_bot0: Option<RobotState> = None;
@@ -88,7 +92,7 @@ impl RawPlaybackWindow {
 }
 
 impl WindowTrait for RawPlaybackWindow {
-    fn draw(&mut self, _ctx: &Context) {
+    fn draw(&mut self, _ctx: &Context, _config: &mut WindowConfig, _app_width: f32, _app_height: f32) {
         // Fallback for legacy uses; do nothing
     }
     fn as_any(&self) -> &dyn Any {

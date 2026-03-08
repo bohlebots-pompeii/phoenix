@@ -1,6 +1,6 @@
 use std::any::Any;
 use egui::{Context, Window};
-use crate::windows::Window as WindowTrait;
+use crate::windows::{Window as WindowTrait, WindowConfig};
 use crate::data::robot_state::{RobotState, VisionData, SensorData, MotionData, GameState, PeerRobot, PrintVector};
 
 pub struct RawSerialWindow {
@@ -28,11 +28,12 @@ impl RawSerialWindow {
 }
 
 impl WindowTrait for RawSerialWindow {
-    fn draw(&mut self, ctx: &Context) {
-        Window::new("Raw Serial Data")
-            .default_width(300.0)
-            .default_height(800.0)
-            .default_pos([1040.0, 120.0])
+    fn draw(&mut self, ctx: &Context, config: &mut WindowConfig, app_width: f32, app_height: f32) {
+        let rect = config.raw_serial_rect(app_width, app_height);
+        Window::new(format!("Raw Serial Data [{}]", config.selected_layout_idx()))
+            .default_width(rect.width())
+            .default_height(rect.height())
+            .default_pos([rect.left(), rect.top()])
             .resizable(true)
             .show(ctx, |ui| {
                 egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {

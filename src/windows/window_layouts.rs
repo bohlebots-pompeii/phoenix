@@ -11,6 +11,7 @@ pub struct WindowLayout {
     pub raw_playback: [f32; 4],
     pub raw_serial: [f32; 4],
     pub window_layouts: [f32; 4],
+    pub serial_layouts: [f32; 4],
     // Add more window rects here if needed
 }
 
@@ -23,6 +24,7 @@ pub const LAYOUT_DEFAULT: WindowLayout = WindowLayout {
     raw_playback: [0.0, 900.0, 1300.0, 250.0],
     raw_serial: [0.0, 1150.0, 1300.0, 250.0],
     window_layouts: [80.0, 80.0, 320.0, 360.0],
+    serial_layouts: [100.0, 100.0, 900.0, 900.0],
 };
 
 pub const LAYOUT_NORMAL: WindowLayout = WindowLayout {
@@ -34,6 +36,7 @@ pub const LAYOUT_NORMAL: WindowLayout = WindowLayout {
     raw_playback: [570.0, 827.0, 550.0, 733.0],
     raw_serial: [0.0, 827.0, 550.0, 733.0],
     window_layouts: [600.0, 60.0, 300.0, 340.0],
+    serial_layouts: [1140.0, 0.0, 900.0, 900.0],
 };
 
 pub const ALL_LAYOUTS: &[&WindowLayout] = &[
@@ -74,10 +77,11 @@ let layout_rect = window_config.window_layouts_rect(app_width, app_height);
                             window_config.field_playback = WindowConfig::scale_rect(layout.field_playback, scale);
                             window_config.graph = WindowConfig::scale_rect(layout.graph, scale);
                             window_config.raw_playback = WindowConfig::scale_rect(layout.raw_playback, scale);
-                            window_config.raw_serial = WindowConfig::scale_rect(layout.raw_serial, scale);
-window_config.window_layouts = WindowConfig::scale_rect(layout.window_layouts, scale);
-                            // --- Force egui to close windows so default_* is respected next frame ---
-                            ui.ctx().memory_mut(|mem| mem.reset_areas());
+                             window_config.raw_serial = WindowConfig::scale_rect(layout.raw_serial, scale);
+                             window_config.serial_settings = WindowConfig::scale_rect(layout.serial_layouts, scale);
+                             window_config.window_layouts = WindowConfig::scale_rect(layout.window_layouts, scale);
+                             // --- Force egui to close windows so default_* is respected next frame ---
+                             ui.ctx().memory_mut(|mem| mem.reset_areas());
                         }
                     }
                 });
@@ -87,16 +91,16 @@ window_config.window_layouts = WindowConfig::scale_rect(layout.window_layouts, s
                 let scaled_field_playback = WindowConfig::scale_rect(layout.field_playback, scale);
                 let scaled_graph = WindowConfig::scale_rect(layout.graph, scale);
                 let scaled_raw_playback = WindowConfig::scale_rect(layout.raw_playback, scale);
-let scaled_raw_serial = WindowConfig::scale_rect(layout.raw_serial, scale);
-let scaled_window_layouts = WindowConfig::scale_rect(layout.window_layouts, scale);
-ui.label(format!("Console (scaled): {:?}", scaled_console));
-ui.label(format!("Field (scaled): {:?}", scaled_field));
-ui.label(format!("Field Playback (scaled): {:?}", scaled_field_playback));
-ui.label(format!("Graph (scaled): {:?}", scaled_graph));
-ui.label(format!("Raw Playback (scaled): {:?}", scaled_raw_playback));
-ui.label(format!("Raw Serial (scaled): {:?}", scaled_raw_serial));
-ui.label(format!("Window Layout (scaled): {:?}", scaled_window_layouts));
-// Actual UI rendering logic using scaled rects for all windows
+                let scaled_raw_serial = WindowConfig::scale_rect(layout.raw_serial, scale);
+                let scaled_window_layouts = WindowConfig::scale_rect(layout.window_layouts, scale);
+                ui.label(format!("Console (scaled): {:?}", scaled_console));
+                ui.label(format!("Field (scaled): {:?}", scaled_field));
+                ui.label(format!("Field Playback (scaled): {:?}", scaled_field_playback));
+                ui.label(format!("Graph (scaled): {:?}", scaled_graph));
+                ui.label(format!("Raw Playback (scaled): {:?}", scaled_raw_playback));
+                ui.label(format!("Raw Serial (scaled): {:?}", scaled_raw_serial));
+                ui.label(format!("Window Layout (scaled): {:?}", scaled_window_layouts));
+                // Actual UI rendering logic using scaled rects for all windows
             });
     }
 }

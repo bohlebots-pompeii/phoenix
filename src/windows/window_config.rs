@@ -8,13 +8,22 @@ pub struct WindowConfig {
     pub graph: [f32; 4],
     pub raw_playback: [f32; 4],
     pub raw_serial: [f32; 4],
+    pub serial_settings: [f32; 4], // NEW: for SerialSettingsWindow
     pub window_layouts: [f32; 4],
     pub selected_layout_idx: usize, // NEW: currently selected layout index
 }
 
+
 impl WindowConfig {
     pub fn selected_layout_idx(&self) -> usize {
         self.selected_layout_idx
+    }
+
+    pub fn serial_settings_rect(&self, _app_width: f32, _app_height: f32) -> egui::Rect {
+        egui::Rect::from_min_size(
+            egui::pos2(self.serial_settings[0], self.serial_settings[1]),
+            egui::vec2(self.serial_settings[2], self.serial_settings[3])
+        )
     }
 
     pub fn window_layouts_rect(&self, _app_width: f32, _app_height: f32) -> egui::Rect {
@@ -77,6 +86,7 @@ impl WindowConfig {
             graph: [0.0, 0.0, 0.0, 0.0],
             raw_playback: [0.0, 0.0, 0.0, 0.0],
             raw_serial: [0.0, 0.0, 0.0, 0.0],
+            serial_settings: [100.0 * scale, 100.0 * scale, 350.0 * scale, 190.0 * scale],
             window_layouts: [0.0, 0.0, 0.0, 0.0],
             selected_layout_idx: 0,
         }
@@ -92,6 +102,7 @@ impl Default for WindowConfig {
             graph: [0.0; 4],
             raw_playback: [0.0; 4],
             raw_serial: [0.0; 4],
+            serial_settings: [100.0, 100.0, 350.0, 190.0],
             window_layouts: [0.0; 4],
             selected_layout_idx: 0,
         }

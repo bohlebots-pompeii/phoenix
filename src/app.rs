@@ -1,7 +1,17 @@
 use eframe::egui;
 use crate::widgets::window_manager::WindowManager;
 use crate::windows::{FieldWindow, ConsoleWindow, GraphWindow, PlaybackWindow, RawSerialWindow, RawPlaybackWindow, LayoutWindow, WindowConfig};
-use std::sync::mpsc::{Receiver, channel};
+use crate::windows::serial_settings::{SerialStatus};
+use std::sync::mpsc::{Receiver, channel, Sender};
+use std::thread::JoinHandle;
+
+pub enum SerialAction {
+    Connect {
+        port: String,
+        baud: u32,
+    },
+    Disconnect,
+}
 
 pub struct SoccerToolApp {
     manager: WindowManager,
@@ -11,7 +21,14 @@ pub struct SoccerToolApp {
 
     rx: Option<Receiver<String>>,
     serial_enabled: bool,
+    // Serial runtime state:
+    pending_serial_action: Option<SerialAction>,
+    serial_status: SerialStatus,
+    serial_error: Option<String>,
+    serial_thread_handle: Option<JoinHandle<()>>,
+    serial_stop_tx: Option<Sender<()>>,
 }
+
 
 impl SoccerToolApp {
     pub fn new(rx: Option<Receiver<String>>) -> Self {
@@ -92,9 +109,12 @@ impl SoccerToolApp {
             });
             Some(rx)
         } else {
-            // PRODUCTION: TODO Replace with real serial receive code, or keep None for now
-            None
+            // Real serial mode: try to open port and start channel if successful
+            let port_name = if cfg!(windows) { "COM3" } else { "/dev/ttyUSB0" };
+            let baud = 115200;
+            crate::serial::connect_serial(port_name, baud)
         };
+
 
         let mut manager = WindowManager::new();
 
@@ -109,13 +129,20 @@ impl SoccerToolApp {
         manager.add_window(Box::new(LayoutWindow::new()));
 
 
+        manager.add_window(Box::new(crate::windows::SerialSettingsWindow::new()));
+        let serial_enabled = !dummy_mode && rx.is_some();
         Self {
             manager,
             window_config: WindowConfig::default(),
             app_width: 0.0,
             app_height: 0.0,
             rx,
-            serial_enabled: false, // TODO For extension: update if you use real serial
+            serial_enabled,
+            pending_serial_action: None,
+            serial_status: SerialStatus::Disconnected,
+            serial_error: None,
+            serial_thread_handle: None,
+            serial_stop_tx: None,
         }
     }
 }

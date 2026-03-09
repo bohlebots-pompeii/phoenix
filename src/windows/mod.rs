@@ -6,6 +6,7 @@ pub mod raw_serial;
 
 pub mod raw_playback;
 mod window_layouts;
+pub mod serial_settings;
 pub mod window_config;
 
 pub use field::FieldWindow;
@@ -16,6 +17,7 @@ pub use raw_serial::RawSerialWindow;
 pub use raw_playback::RawPlaybackWindow;
 pub use window_layouts::LayoutWindow;
 pub use window_config::WindowConfig;
+pub use serial_settings::SerialSettingsWindow;
 
 use egui::Context;
 

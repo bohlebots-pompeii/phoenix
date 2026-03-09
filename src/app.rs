@@ -109,10 +109,8 @@ impl SoccerToolApp {
             });
             Some(rx)
         } else {
-            // Real serial mode: try to open port and start channel if successful
-            let port_name = if cfg!(windows) { "COM3" } else { "/dev/ttyUSB0" };
-            let baud = 115200;
-            crate::serial::connect_serial(port_name, baud)
+            // Real serial mode: don't connect at startup, wait for user to connect via GUI
+            None
         };
 
 
@@ -155,6 +153,49 @@ impl eframe::App for SoccerToolApp {
         self.app_height = app_rect.height();
         WindowConfig::compute_scale(self.app_width, self.app_height);
         let mut got_new_data = false;
+
+        // Poll SerialSettingsWindow for pending connect/disconnect actions
+        if !self.serial_enabled {
+            let mut pending_connect: Option<(String, u32)> = None;
+            let mut pending_disconnect = false;
+            for window in self.manager.windows.iter_mut() {
+                if let Some(sw) = window.as_any_mut().downcast_mut::<crate::windows::SerialSettingsWindow>() {
+                    if let Some(action) = sw.pending_connect.take() {
+                        pending_connect = Some(action);
+                    }
+                    if sw.pending_disconnect {
+                        sw.pending_disconnect = false;
+                        pending_disconnect = true;
+                    }
+                }
+            }
+            if let Some((port, baud)) = pending_connect {
+                match crate::serial::connect_serial(&port, baud) {
+                    Some(rx) => {
+                        self.rx = Some(rx);
+                        self.serial_enabled = true;
+                        for window in self.manager.windows.iter_mut() {
+                            if let Some(sw) = window.as_any_mut().downcast_mut::<crate::windows::SerialSettingsWindow>() {
+                                sw.status = crate::windows::serial_settings::SerialStatus::Connected;
+                                sw.error_message = None;
+                            }
+                        }
+                    }
+                    None => {
+                        for window in self.manager.windows.iter_mut() {
+                            if let Some(sw) = window.as_any_mut().downcast_mut::<crate::windows::SerialSettingsWindow>() {
+                                sw.status = crate::windows::serial_settings::SerialStatus::Error;
+                                sw.error_message = Some(format!("Failed to open port: {}", port));
+                            }
+                        }
+                    }
+                }
+            }
+            if pending_disconnect {
+                self.rx = None;
+                self.serial_enabled = false;
+            }
+        }
 
         if let Some(rx) = &self.rx {
             while let Ok(line) = rx.try_recv() {

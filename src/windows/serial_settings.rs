@@ -19,6 +19,8 @@ pub struct SerialSettingsWindow {
     pub status: SerialStatus, 
     pub error_message: Option<String>,          // latest error shown
     pub last_status: Option<SerialStatus>, // Used to trigger polling/updates
+    pub pending_connect: Option<(String, u32)>, // Some((port, baud)) when Connect is clicked
+    pub pending_disconnect: bool,               // true when Disconnect is clicked
 }
 
 impl SerialSettingsWindow {
@@ -31,6 +33,8 @@ impl SerialSettingsWindow {
             status: SerialStatus::Disconnected,
             error_message: None,
             last_status: None,
+            pending_connect: None,
+            pending_disconnect: false,
         }
     }
 
@@ -76,11 +80,13 @@ impl SerialSettingsWindow {
                     let connect_enabled = self.status == SerialStatus::Disconnected && self.selected_port.is_some();
                     if ui.add_enabled(connect_enabled, egui::Button::new("Connect")).clicked() {
                         self.status = SerialStatus::Connecting;
-                        // Actual connect callback must be done via app
+                        if let Some(ref port) = self.selected_port {
+                            self.pending_connect = Some((port.clone(), self.baud));
+                        }
                     }
                     if ui.add_enabled(self.status == SerialStatus::Connected, egui::Button::new("Disconnect")).clicked() {
                         self.status = SerialStatus::Disconnected;
-                        // Actual disconnect logic must be triggered in app
+                        self.pending_disconnect = true;
                     }
                     ui.label(format!("Status: {:?}", self.status));
                 });

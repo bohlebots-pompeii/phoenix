@@ -32,7 +32,7 @@ pub const LAYOUT_NORMAL: WindowLayout = WindowLayout {
     console: [2150.0, 0.0, 600.0, 1560.0],
     field: [0.0, 0.0, 550.0, 780.0],
     field_playback: [570.0, 0.0, 550.0, 780.0],
-    graph: [1200.0, 0.0, 500.0, 400.0],
+    graph: [1200.0, 900.0, 500.0, 400.0],
     raw_playback: [570.0, 827.0, 550.0, 733.0],
     raw_serial: [0.0, 827.0, 550.0, 733.0],
     window_layouts: [600.0, 60.0, 300.0, 340.0],

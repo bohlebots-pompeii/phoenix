@@ -2,7 +2,7 @@ use eframe::egui;
 use crate::widgets::window_manager::WindowManager;
 use crate::windows::{FieldWindow, ConsoleWindow, GraphWindow, PlaybackWindow, RawSerialWindow, RawPlaybackWindow, LayoutWindow, WindowConfig};
 use crate::windows::serial_settings::{SerialStatus};
-use std::sync::mpsc::{Receiver, channel, Sender};
+use std::sync::mpsc::{Receiver, Sender};
 use std::thread::JoinHandle;
 
 pub enum SerialAction {
@@ -31,7 +31,7 @@ pub struct SoccerToolApp {
 
 
 impl SoccerToolApp {
-    pub fn new(rx: Option<Receiver<String>>) -> Self {
+    pub fn new(_rx: Option<Receiver<String>>) -> Self {
         Self::new_with_dummy(false)
     }
 
@@ -151,7 +151,12 @@ impl eframe::App for SoccerToolApp {
         let app_rect = ctx.screen_rect();
         self.app_width = app_rect.width();
         self.app_height = app_rect.height();
-        WindowConfig::compute_scale(self.app_width, self.app_height);
+
+        // Ensure all panel rects are initialized with the current app size
+        if self.window_config.panels.len() < 8 { // 8 = number of panels in layout
+            self.window_config.apply_layout(self.window_config.selected_layout_idx, self.app_width, self.app_height);
+        }
+
         let mut got_new_data = false;
 
         // Poll SerialSettingsWindow for pending connect/disconnect actions

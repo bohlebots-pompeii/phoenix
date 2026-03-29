@@ -11,7 +11,7 @@ pub fn start_serial_thread(port: Box<dyn SerialPort>, tx: Sender<String>) {
     });
 }
 
-pub fn read_lines(mut port: Box<dyn SerialPort>, on_line: impl Fn(String)) {
+pub fn read_lines(port: Box<dyn SerialPort>, on_line: impl Fn(String)) {
     let mut reader = BufReader::new(port);
     let mut buf = String::new();
 

@@ -8,6 +8,8 @@ pub mod raw_playback;
 mod window_layouts;
 pub mod serial_settings;
 pub mod window_config;
+pub mod layout_utils;
+pub mod panel_id;
 
 pub use field::FieldWindow;
 pub use console::ConsoleWindow;

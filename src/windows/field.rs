@@ -1,5 +1,6 @@
-use egui::{Color32, Context, Painter, Pos2, Stroke, Window, Shape};
+use egui::{Color32, Context, Painter, Pos2, Stroke, Window};
 use super::{Window as WindowTrait, WindowConfig};
+use crate::windows::panel_id::PanelId;
 
 use std::collections::VecDeque;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -111,11 +112,11 @@ impl WindowTrait for FieldWindow {
     }
 
     fn draw(&mut self, ctx: &Context, config: &mut WindowConfig, app_width: f32, app_height: f32) {
-        let rect = config.field_rect(app_width, app_height);
-        Window::new(format!("Soccer Field [{}]", config.selected_layout_idx()))
-            .default_width(rect.width())
-            .default_height(rect.height())
-            .default_pos([rect.left(), rect.top()])
+        let rect = config.panels.get(&PanelId::Field).unwrap();
+        Window::new(format!("Soccer Field [{}]", config.selected_layout_idx))
+            .default_width(rect[2])
+            .default_height(rect[3])
+            .default_pos([rect[0], rect[1]])
             .resizable(true)
             .show(ctx, |ui| {
                 ui.add(egui::Slider::new(&mut self.slider_value, 0.0..=600.0).text("Recording time (s)"));
@@ -149,7 +150,6 @@ impl WindowTrait for FieldWindow {
                 // --- Replay Export Button ---
                 if ui.button("Save Replay").clicked() {
                     use std::fs;
-                    use std::path::Path;
                     use chrono::Local;
                     // Ensure replays directory exists
                     let _ = fs::create_dir_all("replays");
@@ -743,4 +743,6 @@ pub(crate) fn draw_field(painter: &Painter, rect: egui::Rect, robot: &RobotState
         painter.circle_filled(obj_pos, 2.0 * scale, obj_col);
     }
 }
+
+
 

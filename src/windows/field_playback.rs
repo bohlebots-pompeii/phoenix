@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use egui::{Color32, Context, Window};
+use crate::windows::panel_id::PanelId;
 //use crate::windows::field::SerializableTimedState;
 use serde::{Serialize, Deserialize};
 use crate::data::robot_state::RobotState;
@@ -80,13 +80,13 @@ impl super::Window for PlaybackWindow {
                 },
             }
         }
-let rect = config.field_playback_rect(app_width, app_height);
-Window::new(format!("Replay Window [{}]", config.selected_layout_idx()))
-    .default_width(rect.width())
-    .default_height(rect.height())
-    .default_pos([rect.left(), rect.top()])
-    .resizable(true)
-    .show(ctx, |ui| { 
+        let rect = config.panels.get(&PanelId::FieldPlayback).unwrap();
+        Window::new(format!("Field Playback [{}]", config.selected_layout_idx))
+            .default_width(rect[2])
+            .default_height(rect[3])
+            .default_pos([rect[0], rect[1]])
+            .resizable(true)
+            .show(ctx, |ui| {
                 // --- Replay file selector ---
                 if !self.replay_files.is_empty() {
                     egui::ComboBox::from_label("Select Replay File")

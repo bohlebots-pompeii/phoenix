@@ -1,7 +1,8 @@
 use std::any::Any;
 use egui::{Context, Window};
 use crate::windows::{Window as WindowTrait, WindowConfig};
-use crate::data::robot_state::{RobotState, VisionData, SensorData, MotionData, GameState, PeerRobot, PrintVector};
+use crate::windows::panel_id::PanelId;
+use crate::data::robot_state::{RobotState};
 
 pub struct RawSerialWindow {
     latest_bot0: Option<RobotState>,      // most recent state for bot 0
@@ -29,11 +30,11 @@ impl RawSerialWindow {
 
 impl WindowTrait for RawSerialWindow {
     fn draw(&mut self, ctx: &Context, config: &mut WindowConfig, app_width: f32, app_height: f32) {
-        let rect = config.raw_serial_rect(app_width, app_height);
-        Window::new(format!("Raw Serial Data [{}]", config.selected_layout_idx()))
-            .default_width(rect.width())
-            .default_height(rect.height())
-            .default_pos([rect.left(), rect.top()])
+        let rect = config.panels.get(&PanelId::RawSerial).unwrap();
+        Window::new(format!("Raw Serial Data [{}]", config.selected_layout_idx))
+            .default_width(rect[2])
+            .default_height(rect[3])
+            .default_pos([rect[0], rect[1]])
             .resizable(true)
             .show(ctx, |ui| {
                 egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {

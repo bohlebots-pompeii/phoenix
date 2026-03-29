@@ -1,8 +1,8 @@
 use std::any::Any;
 use egui::{Context, Window};
 use crate::windows::{Window as WindowTrait, WindowConfig};
-use crate::windows::PlaybackWindow;
 use crate::data::robot_state::RobotState;
+use crate::windows::panel_id::PanelId;
 
 // Helper reused from raw_serial.rs
 use crate::windows::raw_serial::robot_state_fields;
@@ -30,11 +30,11 @@ impl RawPlaybackWindow {
         app_height: f32,
         playback: Option<PlaybackSnapshot>,
     ) {
-        let rect = config.raw_playback_rect(app_width, app_height);
-        Window::new(format!("Raw Playback Data [{}]", config.selected_layout_idx()))
-            .default_width(rect.width())
-            .default_height(rect.height())
-            .default_pos([rect.left(), rect.top()])
+        let rect = config.panels.get(&PanelId::RawPlayback).unwrap();
+        Window::new(format!("Raw Playback [{}]", config.selected_layout_idx))
+            .default_width(rect[2])
+            .default_height(rect[3])
+            .default_pos([rect[0], rect[1]])
             .resizable(true)
             .show(ctx, |ui| {
                 let mut latest_bot0: Option<RobotState> = None;

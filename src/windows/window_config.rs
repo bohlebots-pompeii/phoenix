@@ -1,110 +1,88 @@
-use app::SoccerToolApp;
-use crate::app;
+use std::collections::HashMap;
+use crate::windows::panel_id::PanelId;
+use crate::windows::layout_utils::{compute_scale, rect_from_array, scale_rect};
+use crate::windows::window_layouts::{ALL_LAYOUTS, LAYOUT_WINDOW_LAYOUTS_FALLBACK};
 
+/// Pure state: current panel positions/sizes and which layout is active.
+/// No utility methods, no scaling logic — those live in layout_utils.rs.
 pub struct WindowConfig {
-    pub console: [f32; 4],        // first two are x, y positions last two are dimensions
-    pub field: [f32; 4],
-    pub field_playback: [f32; 4],
-    pub graph: [f32; 4],
-    pub raw_playback: [f32; 4],
-    pub raw_serial: [f32; 4],
-    pub serial_settings: [f32; 4], // NEW: for SerialSettingsWindow
-    pub window_layouts: [f32; 4],
-    pub selected_layout_idx: usize, // NEW: currently selected layout index
+    /// Current [x, y, w, h] for every managed panel.
+    pub panels: HashMap<PanelId, [f32; 4]>,
+
+    /// Index into ALL_LAYOUTS that is currently active.
+    pub selected_layout_idx: usize,
+
+    /// When true, panels are pinned to layout positions each frame via
+    /// current_pos(). Set to false to let the user drag freely.
+    pub layout_locked: bool,
 }
 
-
 impl WindowConfig {
-    pub fn selected_layout_idx(&self) -> usize {
-        self.selected_layout_idx
+    /// Build a config scaled to the given viewport at startup.
+    pub fn with_scale(app_width: f32, app_height: f32) -> Self {
+        let mut cfg = Self::default();
+        cfg.apply_layout(0, app_width, app_height);
+        cfg
     }
 
-    pub fn serial_settings_rect(&self, _app_width: f32, _app_height: f32) -> egui::Rect {
-        egui::Rect::from_min_size(
-            egui::pos2(self.serial_settings[0], self.serial_settings[1]),
-            egui::vec2(self.serial_settings[2], self.serial_settings[3])
-        )
-    }
+    /// Apply layout at `index` from ALL_LAYOUTS, scaling to the viewport.
+    /// This is the single place that writes panel positions.
+    pub fn apply_layout(&mut self, index: usize, app_width: f32, app_height: f32) {
+        let layout = ALL_LAYOUTS[index];
+        let scale = compute_scale(app_width, app_height);
 
-    pub fn window_layouts_rect(&self, _app_width: f32, _app_height: f32) -> egui::Rect {
-        egui::Rect::from_min_size(
-            egui::pos2(self.window_layouts[0], self.window_layouts[1]),
-            egui::vec2(self.window_layouts[2], self.window_layouts[3])
-        )
-    }
-    pub fn console_rect(&self, _app_width: f32, _app_height: f32) -> egui::Rect {
-        egui::Rect::from_min_size(
-            egui::pos2(self.console[0], self.console[1]),
-            egui::vec2(self.console[2], self.console[3])
-        )
-    }
-    pub fn field_rect(&self, _app_width: f32, _app_height: f32) -> egui::Rect {
-        egui::Rect::from_min_size(
-            egui::pos2(self.field[0], self.field[1]),
-            egui::vec2(self.field[2], self.field[3])
-        )
-    }
-    pub fn graph_rect(&self, _app_width: f32, _app_height: f32) -> egui::Rect {
-        egui::Rect::from_min_size(
-            egui::pos2(self.graph[0], self.graph[1]),
-            egui::vec2(self.graph[2], self.graph[3])
-        )
-    }
-    pub fn raw_serial_rect(&self, _app_width: f32, _app_height: f32) -> egui::Rect {
-        egui::Rect::from_min_size(
-            egui::pos2(self.raw_serial[0], self.raw_serial[1]),
-            egui::vec2(self.raw_serial[2], self.raw_serial[3])
-        )
-    }
-    pub fn raw_playback_rect(&self, _app_width: f32, _app_height: f32) -> egui::Rect {
-        egui::Rect::from_min_size(
-            egui::pos2(self.raw_playback[0], self.raw_playback[1]),
-            egui::vec2(self.raw_playback[2], self.raw_playback[3])
-        )
-    }
-    pub fn field_playback_rect(&self, _app_width: f32, _app_height: f32) -> egui::Rect {
-        egui::Rect::from_min_size(
-            egui::pos2(self.field_playback[0], self.field_playback[1]),
-            egui::vec2(self.field_playback[2], self.field_playback[3])
-        )
-    }
-    pub fn scale_rect(rect: [f32; 4], scale: f32) -> [f32; 4] {
-        [rect[0] * scale, rect[1] * scale, rect[2] * scale, rect[3] * scale]
-    }
-    pub fn compute_scale(app_width: f32, app_height: f32) -> f32 {
-        let base_width = 2560.0;
-        let base_height = 1440.0;
-        let scale_w = app_width / base_width;
-        let scale_h = app_height / base_height;
-        scale_w.min(scale_h)
-    }
-    pub fn with_scale(scale: f32) -> Self{
-        Self {
-            console: [2000.0 * scale, 0.0 * scale, 700.0 * scale, 1329.0 * scale],
-            field: [0.0 * scale, 0.0 * scale, 900.0 * scale, 900.0 * scale],
-            field_playback: [0.0, 0.0, 0.0, 0.0],
-            graph: [0.0, 0.0, 0.0, 0.0],
-            raw_playback: [0.0, 0.0, 0.0, 0.0],
-            raw_serial: [0.0, 0.0, 0.0, 0.0],
-            serial_settings: [100.0 * scale, 100.0 * scale, 350.0 * scale, 190.0 * scale],
-            window_layouts: [0.0, 0.0, 0.0, 0.0],
-            selected_layout_idx: 0,
+        for (id, rect) in layout.panels {
+            self.panels.insert(*id, scale_rect(*rect, scale));
         }
+
+        self.selected_layout_idx = index;
+    }
+
+    /// Returns the current rect for a panel, or a zero rect if unknown.
+    pub fn rect(&self, id: PanelId) -> [f32; 4] {
+        self.panels.get(&id).copied().unwrap_or([0.0; 4])
+    }
+
+    /// Returns the current rect as an egui::Rect.
+    pub fn egui_rect(&self, id: PanelId) -> egui::Rect {
+        rect_from_array(self.rect(id))
+    }
+
+    /// Returns just the top-left pos as egui::Pos2.
+    pub fn pos(&self, id: PanelId) -> egui::Pos2 {
+        let r = self.rect(id);
+        egui::pos2(r[0], r[1])
+    }
+
+    /// Returns just the size as egui::Vec2.
+    pub fn size(&self, id: PanelId) -> egui::Vec2 {
+        let r = self.rect(id);
+        egui::vec2(r[2], r[3])
+    }
+
+    /// Call this when the user drags a panel manually so it doesn't snap back.
+    pub fn update_panel_rect(&mut self, id: PanelId, rect: egui::Rect) {
+        self.panels.insert(id, [
+            rect.left(),
+            rect.top(),
+            rect.width(),
+            rect.height(),
+        ]);
     }
 }
 
 impl Default for WindowConfig {
     fn default() -> Self {
+        let mut panels = HashMap::new();
+
+        // Give the layout window a sensible position before the first
+        // layout is applied, so it is visible on startup.
+        panels.insert(PanelId::WindowLayouts, LAYOUT_WINDOW_LAYOUTS_FALLBACK);
+
         Self {
-            console: [0.0; 4],
-            field: [0.0; 4],
-            field_playback: [0.0; 4],
-            graph: [0.0; 4],
-            raw_playback: [0.0; 4],
-            raw_serial: [0.0; 4],
-            serial_settings: [100.0, 100.0, 350.0, 190.0],
-            window_layouts: [0.0; 4],
+            panels,
             selected_layout_idx: 0,
+            layout_locked: true,
         }
     }
 }

@@ -1,5 +1,6 @@
 use egui::{Context, Window};
 use crate::windows::{Window as WindowTrait, WindowConfig};
+use crate::windows::panel_id::PanelId;
 use serialport::SerialPortInfo;
 use std::any::Any;
 
@@ -43,11 +44,11 @@ impl SerialSettingsWindow {
     }
 
     pub fn draw(&mut self, ctx: &Context, _config: &mut WindowConfig, _app_width: f32, _app_height: f32) {
-        let rect = _config.serial_settings_rect(_app_width, _app_height);
-        let response = Window::new("Serial Settings")
-            .default_width(rect.width())
-            .default_height(rect.height())
-            .default_pos([rect.left(), rect.top()])
+        let rect = _config.panels.get(&PanelId::SerialSettings).unwrap();
+        Window::new("Serial Settings")
+            .default_width(rect[2])
+            .default_height(rect[3])
+            .default_pos([rect[0], rect[1]])
             .resizable(true)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
@@ -94,12 +95,7 @@ impl SerialSettingsWindow {
                     ui.colored_label(egui::Color32::RED, err);
                 }
             });
-
-        // Persist latest rectangle
-        if let Some(window_response) = response {
-            let rect = window_response.response.rect;
-            _config.serial_settings = [rect.left(), rect.top(), rect.width(), rect.height()];
-        }
+        // No need to persist rect to config, handled by egui and layout system
     }
 }
 

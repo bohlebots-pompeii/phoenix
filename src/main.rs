@@ -31,7 +31,7 @@ fn main() {
         },
     };
 
-    let mut viewport = eframe::egui::ViewportBuilder::default();
+    let mut viewport = egui::ViewportBuilder::default();
     if let Some(icon) = icon_data {
         viewport = viewport.with_icon(icon);
     }

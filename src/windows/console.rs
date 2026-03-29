@@ -3,6 +3,7 @@ use egui::{Context, Window};
 use super::Window as WindowTrait;
 use crate::data;
 use crate::windows::WindowConfig;
+use crate::windows::panel_id::PanelId;
 
 pub struct ConsoleWindow {
     log: String,
@@ -27,11 +28,11 @@ impl WindowTrait for ConsoleWindow {
             lines = lines[lines.len() - MAX_LINES..].to_vec();
         }
         self.log = lines.join("\n");
-        let rect = config.console_rect(app_width, app_height);
-        Window::new(format!("Console [{}]", config.selected_layout_idx()))
-            .default_width(rect.width())
-            .default_height(rect.height())
-            .default_pos([rect.left(), rect.top()])
+        let rect = config.panels.get(&PanelId::Console).unwrap();
+        Window::new(format!("Console [{}]", config.selected_layout_idx))
+            .default_width(rect[2])
+            .default_height(rect[3])
+            .default_pos([rect[0], rect[1]])
             .resizable(true)
             .show(ctx, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
